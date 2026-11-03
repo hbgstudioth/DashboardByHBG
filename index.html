@@ -1195,6 +1195,9 @@ let chart=null, trendMetric="spend";
 function render(){
   const rows=filtered(); const app=document.getElementById("app");
   heroRange.textContent=F.from===F.to?dFull(F.from):`${dFull(F.from)} – ${dFull(F.to)}`;
+  if(!rows.length&&currentPage==="chat"&&(CHAT.msg||CHAT.cust)){ /* chats can exist before Meta's ad data for the day reaches the sheet */
+    paintStatusCounts(); const n=daysBetween(F.from,F.to); acctLine.innerHTML=`${n} วัน`;
+    app.innerHTML=`<section class="panel reveal" id="sec-chat"></section>`; drawChat(agg([]),null,addDays(F.from,-n),addDays(F.from,-1)); applyPage(false); return; }
   if(!rows.length){ paintStatusCounts(); if(F.status!=="all"&&filtered(true).length){ app.innerHTML=`<div class="panel empty"><div style="font-size:40px">📭</div><b>ไม่มี${F.status==="on"?"แคมเปญที่เปิดอยู่":"แคมเปญที่ปิดแล้ว"}ในช่วงที่เลือก</b><br><span class="muted">ลองเลือก “ทุกแคมเปญ” หรือเปลี่ยนช่วงวันที่</span></div>`; return; } app.innerHTML=`<div class="panel empty"><div style="font-size:40px">🗓️</div><b>ยังไม่มีข้อมูลในช่วงที่เลือก</b><br><span class="muted">ข้อมูลล่าสุดในชีตคือ ${dFull(maxDate)} — Meta อาจยังส่งข้อมูลของวันนี้/เมื่อวานเข้าชีตไม่ครบ</span></div>`; return; }
   const T=agg(rows); const n=daysBetween(F.from,F.to);
   const prevTo=addDays(F.from,-1), prevFrom=addDays(F.from,-n);
@@ -1811,9 +1814,10 @@ function drawChat(T,P,prevFrom,prevTo){
   // waiting = last message overall is from the customer (current state, not filtered by date)
   const waiting=[]; S.byConv.forEach((list,cid)=>{ const last=list[list.length-1]; if(last&&!last.fromPage){ let i=list.length-1; while(i>0&&!list[i-1].fromPage) i--; const nm=(list.slice().reverse().find(m=>m.name)||{}).name||""; let c=C.get(cid)||(CHAT.byName&&nm?CHAT.byName.get(nm):null);
     if(!c&&nm) c={name:nm,last:"",link:""}; waiting.push({cid,since:list[i].t,c,ch:last.ch}); } });
-  const now=Date.now(), WAIT_DAYS=7;
-  const oldWait=waiting.filter(w=>now-w.since>WAIT_DAYS*864e5).length;
-  waiting.splice(0,waiting.length,...waiting.filter(w=>now-w.since<=WAIT_DAYS*864e5));
+  const now=Date.now();
+  // follow the date filter: unanswered chats whose waiting customer message falls in the selected range
+  waiting.splice(0,waiting.length,...waiting.filter(w=>{ const d=isoDay(w.since); return d>=F.from&&d<=F.to; }));
+  const rangeTxt=F.from===F.to?dLabel(F.from):`${dLabel(F.from)} – ${dLabel(F.to)}`;
   waiting.sort((a,b)=>a.since-b.since);
   // channel + tags among active chats
   const chCount={}; S.active.forEach(cid=>{ const l=S.byConv.get(cid); const ch=(l&&l[0].ch)||"–"; chCount[ch]=(chCount[ch]||0)+1; });
@@ -1844,10 +1848,10 @@ function drawChat(T,P,prevFrom,prevTo){
     </div>
     <div class="chat-grid">
       <div class="chat-card chat-trend"><div class="cc-h"><h3>แชทรายวัน</h3><span class="note">แท่ง = แชทที่มีการคุย · เส้น = แชทใหม่</span></div><div class="chart-box chat-box"><canvas id="chatChart"></canvas></div></div>
-      <div class="chat-card chat-wait"><div class="cc-h"><h3>รอตอบ <span class="badge-n ${waiting.length?"warn":""}">${fmtN(waiting.length)}</span></h3><span class="note">ลูกค้าทักใน ${WAIT_DAYS} วันล่าสุดแล้วยังไม่ได้ตอบ${oldWait?` · เก่ากว่านั้น ${fmtN(oldWait)} ห้อง`:""}</span></div>
-        <div class="wait-list">${waiting.length?waiting.slice(0,40).map(w=>{ const mins=(now-w.since)/60000, lvl=mins>240?"hot":mins>60?"mid":"ok";
+      <div class="chat-card chat-wait"><div class="cc-h"><h3>รอตอบ <span class="badge-n ${waiting.length?"warn":""}">${fmtN(waiting.length)}</span></h3><span class="note">ลูกค้าทักช่วง ${rangeTxt} แล้วยังไม่ได้ตอบ</span></div>
+        <div class="wait-list">${waiting.length?waiting.slice(0,200).map(w=>{ const mins=(now-w.since)/60000, lvl=mins>240?"hot":mins>60?"mid":"ok";
           const ln=w.c&&w.c.link, ig=/insta/i.test(w.ch||(w.c&&w.c.ch)||"");
-          return `<div class="wait-row"><span class="w-dot ${lvl}"></span><span class="w-main"><b title="${esc(w.c?w.c.name:"")}">${ig?"📸 ":""}${esc(w.c?w.c.name:"ไม่ทราบชื่อลูกค้า")}</b><small>${esc((w.c&&w.c.last)||"")}</small></span><span class="w-time ${lvl}">${fmtMin(mins)}</span>${ln?`<a class="w-chat" href="${esc(ln)}" target="_blank" rel="noopener" title="เปิดห้องแชทนี้">แชท</a>`:`<span class="w-chat off" title="ไม่มีลิงก์แชทในชีต">แชท</span>`}</div>`; }).join(""):'<div class="p-empty">ตอบครบทุกแชทแล้ว 🎉</div>'}</div></div>
+          return `<div class="wait-row"><span class="w-dot ${lvl}"></span><span class="w-main"><b title="${esc(w.c?w.c.name:"")}">${ig?"📸 ":""}${esc(w.c?w.c.name:"ไม่ทราบชื่อลูกค้า")}</b><small>${esc((w.c&&w.c.last)||"")}</small></span><span class="w-time ${lvl}">${fmtMin(mins)}</span>${ln?`<a class="w-chat" href="${esc(ln)}" target="_blank" rel="noopener" title="เปิดห้องแชทนี้">แชท</a>`:`<span class="w-chat off" title="ไม่มีลิงก์แชทในชีต">แชท</span>`}</div>`; }).join(""):`<div class="p-empty">ไม่มีแชทรอตอบในช่วง ${rangeTxt}</div>`}</div></div>
       <div class="chat-card chat-heat"><div class="cc-h"><h3>ช่วงเวลาที่ลูกค้าทัก</h3>
           <div class="seg seg-sm" id="hourSeg"><span class="thumb"></span><button data-v="hour" class="${hourView==="hour"?"on":""}">รายชั่วโมง</button><button data-v="dow" class="${hourView==="dow"?"on":""}">รายวัน</button></div></div>
         <div class="peak-line" id="peakLine"></div>
@@ -2213,7 +2217,7 @@ function goPage(id,push){
   if(id===currentPage){ return; }
   currentPage=id; try{ localStorage.setItem("alld_page",id); }catch(e){}
   if(push){ try{ history.pushState(null,"","#"+id); }catch(e){ try{ location.hash=id; }catch(_){} } }
-  applyPage(true);
+  const pg=PAGES.find(p=>p.id===id); if(pg&&!pg.secs.every(sid=>document.getElementById(sid))) render(); else applyPage(true);
   const top=document.getElementById("app").getBoundingClientRect().top+scrollY-110;
   if(scrollY>top) scrollTo({top:Math.max(0,top),behavior:REDUCED?"auto":"smooth"});
 }
