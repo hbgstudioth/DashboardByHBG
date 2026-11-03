@@ -935,7 +935,7 @@ function gvizToRows(table){
   return table.rows.map(r=>{ const o={};
     (r.c||[]).forEach((cell,i)=>{ if(!cell||cell.v==null) return; let v=cell.v;
       if(typeof v==="string"&&/^Date\(/.test(v)){ const m=v.match(/Date\((\d+),(\d+),(\d+)(?:,(\d+),(\d+),(\d+))?/); v=`${m[1]}-${String(+m[2]+1).padStart(2,"0")}-${String(m[3]).padStart(2,"0")}`; if(m[4]!=null) v+=` ${String(m[4]).padStart(2,"0")}:${String(m[5]).padStart(2,"0")}:${String(m[6]).padStart(2,"0")}`; }
-      o[labels[i]]=v; });
+      o[labels[i]]=v; const L=table.cols[i]&&table.cols[i].id; if(L&&/^[A-Z]{1,3}$/.test(L)) o["#"+L]=v; });
     return o; });
 }
 function parseCSV(text){
@@ -1724,7 +1724,7 @@ async function loadChat(){
     let msg=null;
     if(CFG.tabChatMsg){
       const head=await loadGviz({sheet:CFG.tabChatMsg,tq:"select * limit 0"});
-      const ids=(head.cols||[]).filter(c=>CHAT_MSG_COLS.includes(String(c.label||"").trim())).map(c=>c.id);
+      const ids=(head.cols||[]).filter(c=>{ const l=String(c.label||"").trim(); return CHAT_MSG_COLS.includes(l)||l.startsWith("ชื่อลูกค้า"); }).map(c=>c.id);
       msg=ids.length?await loadGviz({sheet:CFG.tabChatMsg,tq:"select "+ids.join(",")}):await loadGviz({sheet:CFG.tabChatMsg});
     }
     const cust=CFG.tabChatCust?await loadGviz({sheet:CFG.tabChatCust}).catch(()=>null):null;
@@ -1740,6 +1740,7 @@ function parseTs(v){
 const isoDay=t=>{ const d=new Date(t); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; };
 const pick=(r,prefix)=>{ const k=Object.keys(r).find(k=>k.trim().startsWith(prefix)); return k?r[k]:undefined; };
 /* chat link: URL from the sheet, else open the thread in Meta Business Suite inbox from the customer id */
+const urlIn=v=>((String(v==null?"":v).match(/https?:\/\/[^"'\s)]+/)||[])[0]||"");
 function chatLink(v,uid,ch){
   const u=(String(v||"").match(/https?:\/\/[^"'\s)]+/)||[])[0];
   if(u) return u.replace(/&amp;/g,"&");
@@ -1752,18 +1753,19 @@ function normChat(custRows,msgRows){
     const by=String(r["ส่งโดย"]||"").trim(), page=String(r["เพจ"]||"").trim(), sender=String(r["ผู้ส่ง"]||"").trim();
     const fromPage=/เพจ|page|admin|แอดมิน/i.test(by)||(!!page&&sender===page);
     const key=[cid,t,fromPage?1:0,r["message_id"]||""].join("|"); if(seen.has(key)) return; seen.add(key);
-    msg.push({t,day:isoDay(t),cid,page,ch:String(r["ช่องทาง"]||"").trim()||"–",fromPage,att:!!r["ไฟล์แนบ"]}); });
+    msg.push({t,day:isoDay(t),cid,page,ch:String(r["ช่องทาง"]||"").trim()||"–",fromPage,att:!!r["ไฟล์แนบ"],name:fromPage?"":String(pick(r,"ชื่อลูกค้า")||"").trim()}); });
   msg.sort((a,b)=>a.t-b.t);
   const cust=new Map();
   (custRows||[]).forEach(r=>{ const cid=String(r["conversation_id"]||"").trim(); if(!cid) return;
-    const nm=String(pick(r,"ชื่อลูกค้า")||"").trim()||[pick(r,"ชื่อจริง"),pick(r,"นามสกุล")].filter(Boolean).join(" ").trim()||(pick(r,"IG username")?"@"+String(pick(r,"IG username")).replace(/^@/,""):"");
+    const nm=String(pick(r,"ชื่อลูกค้า")||r["#E"]||"").trim()||[pick(r,"ชื่อจริง"),pick(r,"นามสกุล")].filter(Boolean).join(" ").trim()||(pick(r,"IG username")?"@"+String(pick(r,"IG username")).replace(/^@/,""):"");
     const ch0=String(r["ช่องทาง"]||"").trim(), uid=String(pick(r,"ID ลูกค้า")||"").trim();
     cust.set(cid,{cid,uid,name:nm||"ไม่ทราบชื่อ",page:String(r["เพจ"]||"").trim(),ch:String(r["ช่องทาง"]||"").trim(),
       tags:String(pick(r,"ป้ายกำกับ")||"").split(/[,;|]/).map(s=>s.trim()).filter(Boolean),status:String(pick(r,"สถานะแชท")||"").trim(),
       phone:!!String(pick(r,"เบอร์โทรที่พบในแชท")||"").trim(),email:!!String(pick(r,"อีเมลที่พบในแชท")||"").trim(),unread:num(pick(r,"ยังไม่อ่าน")),
-      last:String(pick(r,"ข้อความล่าสุด")||"").trim(),link:chatLink(pick(r,"ลิงก์เปิดแชท"),uid,ch0),gender:String(r["เพศ"]||"").trim(),
+      last:String(pick(r,"ข้อความล่าสุด")||"").trim(),link:chatLink(urlIn(pick(r,"ลิงก์เปิดแชท"))||urlIn(r["#Z"])||Object.values(r).map(urlIn).find(u=>/inbox|business\.facebook|m\.me\/|ig\.me\/|instagram\.com\/direct|messenger\.com/i.test(u))||"",uid,ch0),gender:String(r["เพศ"]||"").trim(),
       avgRt:num(pick(r,"เวลาตอบกลับเฉลี่ย")),total:num(pick(r,"ข้อความทั้งหมด")),lastCust:parseTs(pick(r,"ลูกค้าทักล่าสุด")),lastPage:parseTs(pick(r,"เพจตอบล่าสุด"))}); });
-  return {cust:custRows?cust:null,msg:msgRows?msg:null};
+  const byName=new Map(); cust.forEach(c=>{ if(c.name&&c.name!=="ไม่ทราบชื่อ"&&!byName.has(c.name)) byName.set(c.name,c); });
+  return {cust:custRows?cust:null,byName,msg:msgRows?msg:null};
 }
 function chatStats(from,to){
   const M=CHAT.msg||[], inR=m=>m.day>=from&&m.day<=to;
@@ -1807,7 +1809,8 @@ function drawChat(T,P,prevFrom,prevTo){
   const fast=S.rts.length?S.rts.filter(x=>x<=15).length/S.rts.length*100:null, fastP=SP.rts.length?SP.rts.filter(x=>x<=15).length/SP.rts.length*100:null;
   const adsMsg=T.msg, adShare=S.newC.length?Math.min(100,adsMsg/S.newC.length*100):null;
   // waiting = last message overall is from the customer (current state, not filtered by date)
-  const waiting=[]; S.byConv.forEach((list,cid)=>{ const last=list[list.length-1]; if(last&&!last.fromPage){ let i=list.length-1; while(i>0&&!list[i-1].fromPage) i--; waiting.push({cid,since:list[i].t,c:C.get(cid),ch:last.ch}); } });
+  const waiting=[]; S.byConv.forEach((list,cid)=>{ const last=list[list.length-1]; if(last&&!last.fromPage){ let i=list.length-1; while(i>0&&!list[i-1].fromPage) i--; const nm=(list.slice().reverse().find(m=>m.name)||{}).name||""; let c=C.get(cid)||(CHAT.byName&&nm?CHAT.byName.get(nm):null);
+    if(!c&&nm) c={name:nm,last:"",link:""}; waiting.push({cid,since:list[i].t,c,ch:last.ch}); } });
   const now=Date.now(), WAIT_DAYS=7;
   const oldWait=waiting.filter(w=>now-w.since>WAIT_DAYS*864e5).length;
   waiting.splice(0,waiting.length,...waiting.filter(w=>now-w.since<=WAIT_DAYS*864e5));
