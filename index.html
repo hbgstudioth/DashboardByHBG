@@ -1005,7 +1005,7 @@ function normalize(rows){
     return { date, account:String(r[C.account]||r[C.accountId]||"(ไม่ระบุบัญชี)").trim(), accountId:String(r[C.accountId]||"").replace(/^act_/,""), campaign:r[C.campaign]||"(ไม่มีชื่อ)", adset:r[C.adset]||"",
       adId:String(r[C.adId]||""), ad:r[C.ad]||"", img:imgUrl(r[C.img])||imgUrl(r["image_url"]||r["thumbnail_url"]||r["ลิงก์ภาพ"])||IMG_MAP.get(String(r[C.adId]||""))||"", ...ad, aud:as.aud, audType:as.type, age:as.age,
       imp:num(r[C.imp]), reach:num(r[C.reach]), spend:num(r[C.spend]), clicks:num(r[C.clicks]), link:num(r[C.link]),
-      msg:num(r[C.msg]), newMsg:num(r[C.newMsg]), buy:num(r[C.buy])||num(r[C.buyAlt]), value:num(r[C.value]),
+      msg:num(r[C.msg]), newMsg:num(r[C.newMsg]), buy:num(r[C.buy])||num(r[C.buyAlt]), value:num(r[C.value]), ...(()=>{ const b=num(r[C.buy])||num(r[C.buyAlt]), v=num(r[C.value]); return {buyV:v>0?b:0}; })(),
       v3s:num(r[C.v3s]), thru:num(r[C.thru]), status:pickStatus(r), ...(()=>{ const s=pickStory(r)||POST_MAP.get(String(r[C.adId]||"").trim()); if(!s) return {}; const o={}; if(s.post){ o.post=s.post; o.storyPage=s.page||""; } if(s.link) o.postLink=s.link; return o; })() };
   }).filter(Boolean), r=>[r.date,r.account,r.adId||(r.campaign+"|"+r.adset+"|"+r.ad)].join("|"), "main");
 }
@@ -1071,8 +1071,8 @@ const dFull=iso=>{ const [y,m,d]=iso.split("-").map(Number); return `${d} ${TH_M
 const addDays=(iso,n)=>{ const d=new Date(iso+"T00:00:00Z"); d.setUTCDate(d.getUTCDate()+n); return d.toISOString().slice(0,10); };
 const daysBetween=(a,b)=>Math.round((new Date(b+"T00:00:00Z")-new Date(a+"T00:00:00Z"))/864e5)+1;
 function agg(rows){
-  const t={spend:0,imp:0,reach:0,clicks:0,link:0,msg:0,newMsg:0,buy:0,value:0,v3s:0,thru:0,days:new Set()};
-  rows.forEach(r=>{ for(const k of ["spend","imp","reach","clicks","link","msg","newMsg","buy","value","v3s","thru"]) t[k]+=r[k]; t.days.add(r.date); });
+  const t={spend:0,imp:0,reach:0,clicks:0,link:0,msg:0,newMsg:0,buy:0,value:0,buyV:0,v3s:0,thru:0,days:new Set()};
+  rows.forEach(r=>{ for(const k of ["spend","imp","reach","clicks","link","msg","newMsg","buy","value","buyV","v3s","thru"]) t[k]+=r[k]||0; t.days.add(r.date); });
   t.nDays=t.days.size; t.cpm=div(t.spend*1000,t.imp); t.ctr=div(t.clicks*100,t.imp); t.linkCtr=div(t.link*100,t.imp);
   t.cpMsg=div(t.spend,t.msg); t.cpBuy=div(t.spend,t.buy); t.msgToBuy=div(t.buy*100,t.msg);
   t.hook=div(t.v3s*100,t.imp); t.hold=div(t.thru*100,t.v3s); return t;
@@ -1251,7 +1251,7 @@ function render(){
   <section class="panel reveal" id="sec-trend">
     <div class="sec-title"><h2><span class="ic">📈</span>แนวโน้มรายวัน</h2>
       <div class="seg" id="trendTabs"><span class="thumb"></span>
-        ${[["spend","Spend"],["buy","Purchases"],["msg","Message"],["cpMsg","Cost/Message"],["ctr","CTR"],["cpm","CPM"]].map(([k,l])=>`<button data-k="${k}" class="${k===trendMetric?"on":""}">${l}</button>`).join("")}
+        ${[["spend","Spend"],["buy","Purchases"],["value","มูลค่าการซื้อ"],["buyV","การซื้อที่มีมูลค่า"],["msg","Message"],["cpMsg","Cost/Message"],["ctr","CTR"],["cpm","CPM"]].map(([k,l])=>`<button data-k="${k}" class="${k===trendMetric?"on":""}">${l}</button>`).join("")}
       </div>
     </div>
     <div class="chart-box"><canvas id="trend"></canvas></div>
@@ -1354,11 +1354,13 @@ function compact(v,money){ const a=Math.abs(v); let s= a>=1000? (v/1000).toFixed
 
 function drawTrend(rows){
   const th=document.getElementById("trendHint");
-  if(th) th.innerHTML=trendMetric==="buy"?'<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--s-buy);vertical-align:middle;margin-right:4px"></span>จำนวน Purchase ของวันนั้น · คลิกที่แท่งเพื่อดู Creative ที่เกิดการซื้อ':'สลับไปแท็บ <b>Purchases</b> เพื่อคลิกดู Creative ที่เกิดการซื้อในแต่ละวัน';
+  if(th&&trendMetric==="value"){ th.innerHTML='มูลค่าการซื้อรวมของวันนั้น (action_values · purchase) จากชีต'; }
+  else if(th&&trendMetric==="buyV"){ th.innerHTML='การซื้อที่มีมูลค่า = นับเฉพาะ Purchase ที่มีมูลค่าการซื้อกำกับ (Purchase ที่ไม่มีมูลค่าไม่นับ) · ชีตเป็นข้อมูลรวมรายวันต่อโฆษณา จึงนับ Purchase ของโฆษณานั้นในวันนั้นเมื่อมีมูลค่าการซื้อมากกว่า 0'; }
+  else if(th) th.innerHTML=trendMetric==="buy"?'<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--s-buy);vertical-align:middle;margin-right:4px"></span>จำนวน Purchase ของวันนั้น · คลิกที่แท่งเพื่อดู Creative ที่เกิดการซื้อ':'สลับไปแท็บ <b>Purchases</b> เพื่อคลิกดู Creative ที่เกิดการซื้อในแต่ละวัน';
   const days=[]; for(let d=F.from; d<=F.to; d=addDays(d,1)) days.push(d);
   const g=groupBy(rows,r=>r.date);
   const vals=days.map(d=>{ if(!g.has(d)) return null; const v=agg(g.get(d))[trendMetric]; return v==null?null:+v.toFixed(2); });
-  const meta={spend:["Spend (฿)","--s-spend",fmtB,v=>compact(v,true)],buy:["Purchases","--s-buy",fmtN,v=>String(v)],msg:["Message","--s-msg",fmtN,v=>String(v)],
+  const meta={spend:["Spend (฿)","--s-spend",fmtB,v=>compact(v,true)],buy:["Purchases","--s-buy",fmtN,v=>String(v)],value:["มูลค่าการซื้อ (฿)","--s-buy",fmtB,v=>compact(v,true)],buyV:["การซื้อที่มีมูลค่า","--s-buy",fmtN,v=>String(v)],msg:["Message","--s-msg",fmtN,v=>String(v)],
     cpMsg:["Cost/Message (฿)","--s-msg",fmtB,v=>compact(v,true)],ctr:["CTR (%)","--s-spend",fmtP,v=>v.toFixed(1)+"%"],cpm:["CPM (฿)","--s-spend",fmtB,v=>compact(v,true)]}[trendMetric];
   const valid=vals.filter(x=>x!=null), avg=valid.length?valid.reduce((a,b)=>a+b,0)/valid.length:null;
   if(chart) chart.destroy();
@@ -1373,7 +1375,7 @@ function drawTrend(rows){
   const nTie=i=>i<0?0:vals.filter(v=>v===vals[i]).length;
   const LO="#f59e0b", hiC=(document.documentElement.dataset.theme==="dark"||(!document.documentElement.dataset.theme&&matchMedia("(prefers-color-scheme: dark)").matches))?"#eef0fa":"#14182b";
   const faded=ctx.createLinearGradient(0,0,0,320); faded.addColorStop(0,color+"b3"); faded.addColorStop(1,color+"33");
-  const fmtAvg=v=>["buy","msg"].includes(trendMetric)?fmtD(v,1):meta[2](v);
+  const fmtAvg=v=>["buy","buyV","msg"].includes(trendMetric)?fmtD(v,1):meta[2](v);
   const ext=document.getElementById("trendExt");
   if(ext) ext.innerHTML=iMax<0?"":`<span class="te hi"><i>▲</i>สูงสุด <b>${meta[2](vals[iMax])}</b> · ${dFull(days[iMax])}${nTie(iMax)>1?` <em>(เท่ากัน ${nTie(iMax)} วัน)</em>`:""}</span>`+
     (iMin>=0?`<span class="te lo"><i>▼</i>ต่ำสุด <b>${meta[2](vals[iMin])}</b> · ${dFull(days[iMin])}${nTie(iMin)>1?` <em>(เท่ากัน ${nTie(iMin)} วัน)</em>`:""}</span>`:"")+
@@ -1391,7 +1393,7 @@ function drawTrend(rows){
       layout:{padding:{top:34}},
       onClick:(e,els)=>{ if(trendMetric!=="buy") return; const el=els.find(x=>x.datasetIndex===0)||els[0]; if(el) openDayPopup(days[el.index]); },
       onHover:(e,els)=>{ const el=els.find(x=>x.datasetIndex===0)||els[0]; e.native&&(e.native.target.style.cursor=trendMetric==="buy"&&el&&buyByDay[el.index]>0?"pointer":"default"); },
-      plugins:{buyMarks:{counts:trendMetric==="buy"?buyByDay:null,color:css("--s-buy")},valueLabels:{fmt:meta[3],color:css("--text-2"),skipZero:trendMetric==="buy",skip:[iMax,iMin]},extremes:{iMax,iMin,fmt:meta[3],hi:hiC,lo:LO},
+      plugins:{buyMarks:{counts:trendMetric==="buy"?buyByDay:null,color:css("--s-buy")},valueLabels:{fmt:meta[3],color:css("--text-2"),skipZero:["buy","buyV","value"].includes(trendMetric),skip:[iMax,iMin]},extremes:{iMax,iMin,fmt:meta[3],hi:hiC,lo:LO},
         legend:{labels:{color:css("--text-2"),boxWidth:10,boxHeight:10,usePointStyle:true,font:{family:"Prompt"}}},
         tooltip:{backgroundColor:"rgba(20,24,50,.92)",padding:10,cornerRadius:12,titleFont:{family:"Prompt",weight:"600"},bodyFont:{family:"Prompt"},
           callbacks:{label:c=>c.datasetIndex===1?` ${c.dataset.label}`:(c.raw==null?` ${c.dataset.label}: –`:` ${c.dataset.label}: ${meta[2](c.raw)}`),
