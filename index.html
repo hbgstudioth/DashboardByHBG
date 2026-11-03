@@ -22,7 +22,7 @@
   --green-1:#22c55e; --green-2:#15803d; --green-soft:#e6f8ee;
   --violet:#7c5cf0; --violet-soft:#efeafe;
   --amber:#e8a400; --amber-soft:#fff6db;
-  --s-spend:#2f54e6; --s-msg:#1baf7a; --s-buy:#7c5cf0;
+  --s-spend:#2f54e6; --s-msg:#1baf7a; --s-buy:#7c5cf0; --s-val:#db4f93; --s-buyv:#e08a00; --s-cpm:#0e9fb3;
   --good:#16a34a; --bad:#e04848;
   --grid:#eceef6;
   --shadow-sm:0 2px 6px rgba(30,45,120,.06);
@@ -40,7 +40,7 @@
     --text:#eef0fa; --text-2:#b4b9d4; --muted:#7d83a3;
     --brand:#5b7cff; --brand-2:#3b5cf0; --brand-soft:#232c5a; --brand-glow:rgba(91,124,255,.35);
     --green-soft:#16302a; --violet:#9b85ff; --violet-soft:#2a2552; --amber-soft:#3a3018;
-    --s-spend:#5b7cff; --s-msg:#2ec28c; --s-buy:#9b85ff;
+    --s-spend:#5b7cff; --s-msg:#2ec28c; --s-buy:#9b85ff; --s-val:#f07ab3; --s-buyv:#f5a524; --s-cpm:#2fc4d8;
     --good:#3ccf6e; --bad:#ff6b6b; --grid:#262b45;
     --shadow-sm:0 2px 6px rgba(0,0,0,.25); --shadow:0 10px 30px rgba(0,0,0,.3); --shadow-lg:0 18px 44px rgba(0,0,0,.45);
   }
@@ -52,7 +52,7 @@
   --text:#eef0fa; --text-2:#b4b9d4; --muted:#7d83a3;
   --brand:#5b7cff; --brand-2:#3b5cf0; --brand-soft:#232c5a; --brand-glow:rgba(91,124,255,.35);
   --green-soft:#16302a; --violet:#9b85ff; --violet-soft:#2a2552; --amber-soft:#3a3018;
-  --s-spend:#5b7cff; --s-msg:#2ec28c; --s-buy:#9b85ff;
+  --s-spend:#5b7cff; --s-msg:#2ec28c; --s-buy:#9b85ff; --s-val:#f07ab3; --s-buyv:#f5a524; --s-cpm:#2fc4d8;
   --good:#3ccf6e; --bad:#ff6b6b; --grid:#262b45;
   --shadow-sm:0 2px 6px rgba(0,0,0,.25); --shadow:0 10px 30px rgba(0,0,0,.3); --shadow-lg:0 18px 44px rgba(0,0,0,.45);
 }
@@ -645,6 +645,21 @@ body.sn-mini .sn-collapse svg{transform:rotate(180deg)}
 @container app (max-width:560px){ .persona .p-cards{grid-template-columns:1fr!important} }
 .reveal.no-anim,.reveal.no-anim *{transition:none!important}
 .no-anim .as-bar em{animation:none}
+.tchips{display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end}
+.tchip{display:inline-flex;align-items:center;gap:7px;padding:7px 13px;border-radius:999px;border:1px solid var(--border);background:var(--surface);color:var(--text-2);font:inherit;font-size:13px;cursor:pointer;transition:background .25s,border-color .25s,color .25s,transform .3s var(--spring)}
+.tchip i{width:9px;height:9px;border-radius:50%;background:var(--c);opacity:.3;transition:opacity .25s,transform .3s var(--spring)}
+.tchip:hover{transform:translateY(-1px);border-color:color-mix(in srgb,var(--c) 50%,var(--border))}
+.tchip.on{border-color:var(--c);background:color-mix(in srgb,var(--c) 12%,var(--surface));color:var(--text);font-weight:600}
+.tchip.on i{opacity:1;transform:scale(1.15)}
+.trend-sum{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin:4px 0 14px}
+.trend-sum:empty{display:none}
+.ts-card{border:1px solid var(--border);border-left:4px solid var(--c);border-radius:14px;padding:10px 14px;background:var(--surface);display:flex;flex-direction:column;gap:2px;min-width:0;animation:tsIn .45s var(--ease) both}
+.ts-l{font-size:12px;color:var(--text-2);display:flex;align-items:center;gap:6px}
+.ts-l i{width:8px;height:8px;border-radius:50%;background:var(--c)}
+.ts-card b{font-size:20px;font-weight:600;letter-spacing:-.3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ts-card small{font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+@keyframes tsIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.ts-card{animation:none}}
 .trend-ext{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:10px}
 .trend-ext:empty{display:none}
 .te{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--text-2);background:var(--surface-2);border-radius:999px;padding:4px 12px 4px 6px}
@@ -1192,6 +1207,8 @@ function countUp(root){
 
 /* ================== RENDER ================== */
 let chart=null, trendMetric="spend";
+const TM_KEYS=["spend","buy","value","buyV","msg","cpMsg"];
+let trendSel=(()=>{ try{ const v=JSON.parse(localStorage.getItem("alld_trendsel")||"null"); if(Array.isArray(v)){ const k=v.filter(x=>TM_KEYS.includes(x)); if(k.length) return k; } }catch(e){} return ["spend"]; })();
 function render(){
   const rows=filtered(); const app=document.getElementById("app");
   heroRange.textContent=F.from===F.to?dFull(F.from):`${dFull(F.from)} – ${dFull(F.to)}`;
@@ -1250,10 +1267,11 @@ function render(){
 
   <section class="panel reveal" id="sec-trend">
     <div class="sec-title"><h2><span class="ic">📈</span>แนวโน้มรายวัน</h2>
-      <div class="seg" id="trendTabs"><span class="thumb"></span>
-        ${[["spend","Spend"],["buy","Purchases"],["value","มูลค่าการซื้อ"],["buyV","การซื้อที่มีมูลค่า"],["msg","Message"],["cpMsg","Cost/Message"],["ctr","CTR"],["cpm","CPM"]].map(([k,l])=>`<button data-k="${k}" class="${k===trendMetric?"on":""}">${l}</button>`).join("")}
+      <div class="tchips" id="trendTabs" role="group" aria-label="เลือกค่าที่จะแสดง (เลือกได้หลายค่า)">
+        ${TM_KEYS.map(k=>`<button type="button" data-k="${k}" class="tchip ${trendSel.includes(k)?"on":""}" style="--c:${TM[k].c()}" aria-pressed="${trendSel.includes(k)}"><i></i>${TM[k].l}</button>`).join("")}
       </div>
     </div>
+    <div class="trend-sum" id="trendSum"></div>
     <div class="chart-box"><canvas id="trend"></canvas></div>
     <div class="trend-ext" id="trendExt"></div>
     <div class="p-hint trend-hint" id="trendHint" style="margin-top:8px"></div>
@@ -1293,7 +1311,12 @@ function render(){
     <div class="footnote">เรียงจาก Message มากไปน้อย (คลิกหัวตารางเพื่อเปลี่ยน) · Hook = 3-sec view ÷ Impressions · Hold = ThruPlay ÷ 3-sec view</div>
   </section>`;
 
-  initSeg(document.getElementById("trendTabs"),b=>{ trendMetric=b.dataset.k; drawTrend(rows); });
+  document.querySelectorAll("#trendTabs .tchip").forEach(b=>b.onclick=()=>{ const k=b.dataset.k, on=trendSel.includes(k);
+    if(on&&trendSel.length===1){ b.animate&&!REDUCED&&b.animate([{transform:"translateX(0)"},{transform:"translateX(-3px)"},{transform:"translateX(3px)"},{transform:"none"}],{duration:260}); return; }
+    trendSel=on?trendSel.filter(x=>x!==k):TM_KEYS.filter(x=>x===k||trendSel.includes(x));
+    try{ localStorage.setItem("alld_trendsel",JSON.stringify(trendSel)); }catch(e){}
+    document.querySelectorAll("#trendTabs .tchip").forEach(x=>{ const o=trendSel.includes(x.dataset.k); x.classList.toggle("on",o); x.setAttribute("aria-pressed",o); });
+    drawTrend(rows); });
   drawTrend(rows);
   drawPersona(rows);
   drawInsights(rows,T,adStats(rows));
@@ -1352,7 +1375,65 @@ const extremes={id:"extremes",afterDatasetsDraw(c,args,o){
 }};
 function compact(v,money){ const a=Math.abs(v); let s= a>=1000? (v/1000).toFixed(a>=10000?0:1)+"k" : (Number.isInteger(v)?String(v):v.toFixed(a<10?2:0)); return (money?"฿":"")+s; }
 
+/* metrics on the daily trend: label, colour, money?, additive?, formatter, short label */
+const TM={
+  spend:{l:"Spend",c:()=>css("--s-spend"),money:true,sum:true},
+  buy:{l:"Purchases",c:()=>css("--s-buy"),sum:true},
+  value:{l:"มูลค่าการซื้อ",c:()=>css("--s-val"),money:true,sum:true},
+  buyV:{l:"การซื้อที่มีมูลค่า",c:()=>css("--s-buyv"),sum:true},
+  msg:{l:"Message",c:()=>css("--s-msg"),sum:true},
+  cpMsg:{l:"Cost/Message",c:()=>css("--s-cpm"),money:true,sum:false}
+};
+const tmFmt=(k,v)=>v==null?"–":TM[k].money?fmtB(v):fmtN(v);
+function drawTrendSum(rows,days,g){
+  const el=document.getElementById("trendSum"); if(!el) return;
+  const T=agg(rows), n=days.length;
+  el.innerHTML=trendSel.map(k=>{ const m=TM[k];
+    const daily=days.map(d=>g.has(d)?agg(g.get(d))[k]:null), valid=daily.filter(v=>v!=null);
+    let iMax=-1; daily.forEach((v,i)=>{ if(v!=null&&(iMax<0||v>=daily[iMax])) iMax=i; });
+    const main=m.sum?T[k]:T[k], avg=m.sum?(T.nDays?T[k]/T.nDays:null):(valid.length?valid.reduce((a,b)=>a+b,0)/valid.length:null);
+    return `<div class="ts-card" style="--c:${m.c()}"><span class="ts-l"><i></i>${m.l}${m.sum?" รวม":" (เฉลี่ยทั้งช่วง)"}</span><b>${tmFmt(k,main)}</b>
+      <small>เฉลี่ย ${avg==null?"–":m.money?fmtB(avg):fmtD(avg,1)} / วัน${iMax>=0?` · สูงสุด ${tmFmt(k,daily[iMax])} (${dLabel(days[iMax])})`:""}</small></div>`; }).join("");
+}
 function drawTrend(rows){
+  const days=[]; for(let d=F.from; d<=F.to; d=addDays(d,1)) days.push(d);
+  const g=groupBy(rows,r=>r.date);
+  drawTrendSum(rows,days,g);
+  if(trendSel.length===1){ trendMetric=trendSel[0]; return drawTrendSingle(rows); }
+  trendMetric="";
+  const th=document.getElementById("trendHint"); if(th) th.innerHTML=`กำลังแสดง ${trendSel.length} ค่าพร้อมกัน · ค่าที่เป็นเงิน (฿) ใช้แกนซ้าย ค่าที่เป็นจำนวนใช้แกนขวา${trendSel.includes("buy")?" · คลิกที่จุดเพื่อดู Creative ที่เกิดการซื้อ":""}`;
+  const ext=document.getElementById("trendExt"); if(ext) ext.innerHTML="";
+  const hasMoney=trendSel.some(k=>TM[k].money), hasCount=trendSel.some(k=>!TM[k].money);
+  const buyByDay=days.map(d=>g.has(d)?g.get(d).reduce((s,r)=>s+r.buy,0):0);
+  if(chart) chart.destroy();
+  const ctx=document.getElementById("trend").getContext("2d");
+  const ds=trendSel.map(k=>{ const c=TM[k].c(); const data=days.map(d=>{ if(!g.has(d)) return null; const v=agg(g.get(d))[k]; return v==null?null:+v.toFixed(2); });
+    return {label:TM[k].l,_k:k,data,borderColor:c,backgroundColor:c+"1f",borderWidth:2.5,pointRadius:3,pointHoverRadius:6,pointBackgroundColor:css("--surface"),pointBorderColor:c,pointBorderWidth:2,tension:.35,cubicInterpolationMode:"monotone",spanGaps:true,fill:false,
+      yAxisID:TM[k].money||!hasMoney?"y":"y1"}; });
+  const showLabels=days.length<=16&&trendSel.length<=3;
+  const axis=(pos,money,grid)=>({position:pos,beginAtZero:true,grid:{color:grid?css("--grid"):"transparent",drawOnChartArea:grid},border:{display:false},
+    ticks:{color:css("--text-2"),font:{family:"Prompt"},precision:money?undefined:0,callback:v=>compact(v,money)}});
+  chart=new Chart(ctx,{type:"line",data:{labels:days.map(dLabel),datasets:ds},
+    options:{responsive:true,maintainAspectRatio:false,interaction:{mode:"index",intersect:false},
+      animation:REDUCED?false:{duration:800,easing:"easeOutQuart"},layout:{padding:{top:24}},
+      onClick:(e,els)=>{ if(!trendSel.includes("buy")) return; const el=els[0]; if(el&&buyByDay[el.index]>0) openDayPopup(days[el.index]); },
+      onHover:(e,els)=>{ const el=els[0]; e.native&&(e.native.target.style.cursor=trendSel.includes("buy")&&el&&buyByDay[el.index]>0?"pointer":"default"); },
+      plugins:{multiLabels:{on:showLabels},
+        legend:{labels:{color:css("--text-2"),boxWidth:10,boxHeight:10,usePointStyle:true,font:{family:"Prompt"}}},
+        tooltip:{backgroundColor:"rgba(20,24,50,.92)",padding:10,cornerRadius:12,titleFont:{family:"Prompt",weight:"600"},bodyFont:{family:"Prompt"},usePointStyle:true,
+          callbacks:{label:c=>` ${c.dataset.label}: ${c.raw==null?"–":tmFmt(c.dataset._k,c.raw)}`,
+            footer:items=>{ if(!trendSel.includes("buy")) return ""; const i=items[0]&&items[0].dataIndex; return buyByDay[i]?"คลิกเพื่อดู Creative ที่เกิดการซื้อ":""; }}}},
+      scales:{x:{grid:{display:false},ticks:{color:css("--text-2"),maxRotation:0,autoSkip:true,font:{family:"Prompt"}}},
+        y:axis("left",hasMoney,true), ...(hasMoney&&hasCount?{y1:axis("right",false,false)}:{})}},
+    plugins:[multiLabels]});
+}
+/* value labels for every visible series in multi-metric mode */
+const multiLabels={id:"multiLabels",afterDatasetsDraw(c,args,o){
+  if(!o||!o.on) return; const ctx=c.ctx; ctx.save(); ctx.font="500 9.5px Prompt, sans-serif"; ctx.textAlign="center"; ctx.textBaseline="bottom";
+  c.data.datasets.forEach((d,di)=>{ const meta=c.getDatasetMeta(di); if(meta.hidden) return; ctx.fillStyle=d.borderColor;
+    meta.data.forEach((el,i)=>{ const v=d.data[i]; if(v==null||v===0) return; ctx.fillText(TM[d._k].money?compact(v,true):compact(v),el.x,el.y-6); }); });
+  ctx.restore(); }};
+function drawTrendSingle(rows){
   const th=document.getElementById("trendHint");
   if(th&&trendMetric==="value"){ th.innerHTML='มูลค่าการซื้อรวมของวันนั้น (action_values · purchase) จากชีต'; }
   else if(th&&trendMetric==="buyV"){ th.innerHTML='การซื้อที่มีมูลค่า = นับเฉพาะ Purchase ที่มีมูลค่าการซื้อกำกับ (Purchase ที่ไม่มีมูลค่าไม่นับ) · ชีตเป็นข้อมูลรวมรายวันต่อโฆษณา จึงนับ Purchase ของโฆษณานั้นในวันนั้นเมื่อมีมูลค่าการซื้อมากกว่า 0'; }
@@ -1360,8 +1441,8 @@ function drawTrend(rows){
   const days=[]; for(let d=F.from; d<=F.to; d=addDays(d,1)) days.push(d);
   const g=groupBy(rows,r=>r.date);
   const vals=days.map(d=>{ if(!g.has(d)) return null; const v=agg(g.get(d))[trendMetric]; return v==null?null:+v.toFixed(2); });
-  const meta={spend:["Spend (฿)","--s-spend",fmtB,v=>compact(v,true)],buy:["Purchases","--s-buy",fmtN,v=>String(v)],value:["มูลค่าการซื้อ (฿)","--s-buy",fmtB,v=>compact(v,true)],buyV:["การซื้อที่มีมูลค่า","--s-buy",fmtN,v=>String(v)],msg:["Message","--s-msg",fmtN,v=>String(v)],
-    cpMsg:["Cost/Message (฿)","--s-msg",fmtB,v=>compact(v,true)],ctr:["CTR (%)","--s-spend",fmtP,v=>v.toFixed(1)+"%"],cpm:["CPM (฿)","--s-spend",fmtB,v=>compact(v,true)]}[trendMetric];
+  const meta={spend:["Spend (฿)","--s-spend",fmtB,v=>compact(v,true)],buy:["Purchases","--s-buy",fmtN,v=>String(v)],value:["มูลค่าการซื้อ (฿)","--s-val",fmtB,v=>compact(v,true)],buyV:["การซื้อที่มีมูลค่า","--s-buyv",fmtN,v=>String(v)],msg:["Message","--s-msg",fmtN,v=>String(v)],
+    cpMsg:["Cost/Message (฿)","--s-cpm",fmtB,v=>compact(v,true)],ctr:["CTR (%)","--s-spend",fmtP,v=>v.toFixed(1)+"%"],cpm:["CPM (฿)","--s-spend",fmtB,v=>compact(v,true)]}[trendMetric];
   const valid=vals.filter(x=>x!=null), avg=valid.length?valid.reduce((a,b)=>a+b,0)/valid.length:null;
   if(chart) chart.destroy();
   const isLine=["cpMsg","ctr","cpm"].includes(trendMetric), color=css(meta[1]);
